@@ -1,25 +1,138 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "PA1_template"
+author: "Endless-Void"
+date: "7/1/2020"
+output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-## Loading and preprocessing the data
+# Reproducible Research: Course Project 1
 
+In this R Markdown will show how i made this project.
 
+### 1. Code for reading in the dataset and/or processing the data
 
-## What is mean total number of steps taken per day?
+first this are the packages that i used:  
 
+```{r packages, warning=FALSE, message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(ggpubr)
+```
 
+and the code for read and preprocessing the data. 
 
-## What is the average daily activity pattern?
+```{r read}
+AMD <- read.csv("./data/activity.csv")
+AMD$date <- ymd(AMD$date)
+```
 
+### 2. Histogram of the total number of steps taken each day
 
+```{r histogram1, message=FALSE}
+byDay <- group_by(AMD, date)
+Hist <- summarize(byDay, sum(steps, na.rm = TRUE))
+names(Hist)[2] <- "Total.Steps"
+h <- ggplot(Hist, aes(date, Total.Steps))
+h + geom_bar(stat="identity", color = "black", fill = "purple") + 
+        theme(axis.text.x = element_text(angle = 90)) +
+        xlab("Month and Day in 2012") + ylab("Total Steps") + 
+        ggtitle("Total Number of Steps Taken Each Day") +
+        theme(plot.title = element_text(color = "black", size= 11),
+              axis.title.x = element_text(color = "darkblue"),
+              axis.title.y = element_text(color = "darkblue"))
+```
 
-## Imputing missing values
+### 3. Mean and median number of steps taken each day
 
+```{r mean and median}
+TotalStepsMean <- mean(AMD$steps, na.rm = TRUE)
+TotalStepsMedian <- median(AMD$steps, na.rm = TRUE)
+```
 
+**Mean** = `r TotalStepsMean`  
+**Median** = `r TotalStepsMedian`
 
-## Are there differences in activity patterns between weekdays and weekends?
+```{r note, echo=FALSE}
+note <- mean(AMD$steps>0, na.rm = T) * 100
+```
+**NOTE:** We have a median of cero because only the `r note`% of the data its more than 0 or isnt a NA.
+
+### 4. Time series plot of the average number of steps taken
+
+```{r timeseries, warning=FALSE, message=FALSE}
+byInt <- group_by(AMD, interval)
+mandm <- summarise_each(byInt, 
+                        funs(mean(.,na.rm = TRUE),median(.,na.rm = TRUE)),
+                        steps)
+ggplot(mandm, aes(interval, mean)) + 
+        geom_line(color="purple") +
+        xlab("Time Interval") + ylab("Average Number of Steps")
+```
+
+### 5. The 5-minute interval that, on average, contains the maximum number of steps
+
+```{r maxsteps}
+MaxStepI <- top_n(mandm, 1, mean)
+MaxStepI
+```
+
+### 6.  Code to describe and show a strategy for imputing missing data.
+
+In essence the code imput the mean of the day that the "NA" its located.
+
+```{r imputing, warning=FALSE, message=FALSE}
+sum(is.na(AMD)) ## Number NAs
+AMD2 <- AMD
+tableMeans <- summarize(byDay, mean(steps, na.rm = TRUE))
+names(tableMeans)[2] <- "Mean"
+tableMeans[which(tableMeans$Mean == "NaN"),2] <- 0
+for (i in 1:nrow(AMD2)) {
+        if (is.na(AMD2[i,1])){
+                AMD2[i,1] <- subset(tableMeans, date == AMD[i,2])[1,2]
+        }
+        
+}
+head(AMD2)
+```
+
+### 7. Histogram of the total number of steps taken each day after missing values are imputed
+
+```{r histogram2, warning=FALSE, message=FALSE}
+byDay2 <- group_by(AMD2, date)
+Hist2 <- summarize(byDay2, sum(steps, na.rm = TRUE))
+names(Hist2)[2] <- "Total.Steps"
+h2 <- ggplot(Hist2, aes(date, Total.Steps))
+h2 + geom_bar(stat="identity", color = "black", fill = "purple") + 
+        xlab("Month and Day in 2012") + ylab("Total Steps") + 
+        ggtitle("Total Number of Steps Taken Each Day") +
+        theme(plot.title = element_text(color = "black", size= 11),
+              axis.title.x = element_text(color = "darkblue"),
+              axis.title.y = element_text(color = "darkblue"))
+```
+
+## 8. Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends.
+
+```{r grid,warning=FALSE, message=FALSE}
+weekends <- c("Saturday", "Sunday")
+weekdays <- c("Friday", "Monday", "Thursday", "Tuesday", "Wednesday")
+WEndsData <- subset(AMD2, weekdays(byDay$date) %in% weekends) %>% group_by(interval)
+WDaysData <- subset(AMD2, weekdays(byDay$date) %in% weekdays) %>% group_by(interval)
+WEData <- summarise(WEndsData, mean(steps, na.rm = T))
+WDData <- summarise(WDaysData, mean(steps, na.rm = T))
+names(WEData)[2] <- "Steps"; names(WDData)[2] <- "Steps"
+we <- ggplot(WEData, aes(interval, Steps)) +
+        geom_line(color="purple") +
+        ggtitle("Weekends")
+
+   
+wd <- ggplot(WDData, aes(interval, Steps)) +
+        geom_line(color="purple") +
+        ggtitle("Weekdays")  
+
+ggarrange(we,wd,nrow = 2)
+```
